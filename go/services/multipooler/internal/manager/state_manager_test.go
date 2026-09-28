@@ -260,6 +260,25 @@ func TestStateManager_Register(t *testing.T) {
 	assert.Equal(t, 1, comp2.callCount)
 }
 
+func TestStateManager_Unregister(t *testing.T) {
+	kept := &testComponent{}
+	removed := &testComponent{}
+	r := newTestRecord(clustermetadatapb.PoolerType_REPLICA, clustermetadatapb.PoolerServingStatus_DISABLED)
+	ssm := NewStateManager(newTestLogger(), r, selfLeaderConsensusStatus, kept)
+	require.NoError(t, ssm.RegisterAndSync(t.Context(), removed))
+
+	ssm.Unregister(removed)
+	ssm.Unregister(removed) // not registered any more: a no-op
+
+	require.NoError(t, ssm.Mutate(newActionLockedCtx(t), func(s *servingStateMutation) {
+		s.PostgresMode = pgmode.Primary
+		s.ServingStatus = clustermetadatapb.PoolerServingStatus_SERVING
+	}))
+
+	assert.Equal(t, 1, kept.callCount)
+	assert.Equal(t, 1, removed.callCount, "only the sync from RegisterAndSync, nothing after Unregister")
+}
+
 func TestStateManager_RegisterAndSync(t *testing.T) {
 	comp1 := &testComponent{}
 	r := newTestRecord(clustermetadatapb.PoolerType_PRIMARY, clustermetadatapb.PoolerServingStatus_SERVING)
